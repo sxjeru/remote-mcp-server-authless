@@ -108,13 +108,14 @@ export class MyMCP extends McpAgent {
         const indexURL = "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/";
 
         try {
-            // 动态导入 Pyodide ESM 模块（pyodide.mjs），避免 Node fs 依赖
-            const { loadPyodide } = await import(indexURL + "pyodide.mjs");
-            this.pyodide = await loadPyodide({ indexURL });
+            // Worker 中通过 importScripts 同步加载 pyodide.js
+            (globalThis as any).importScripts(indexURL + "pyodide.js");
+            // loadPyodide 挂在到全局
+            this.pyodide = await (globalThis as any).loadPyodide({ indexURL });
             this.pyodideInitialized = true;
         } catch (error) {
             console.error("Failed to initialize Pyodide:", error);
-            throw new Error("Python环境初始化失败，请稍后重试");
+            throw new Error("Python 环境初始化失败，请稍后重试");
         }
     }
 
