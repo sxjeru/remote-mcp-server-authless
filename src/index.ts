@@ -106,23 +106,11 @@ export class MyMCP extends McpAgent {
         if (this.pyodideInitialized) return;
 
         const indexURL = "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/";
-        // Cloudflare Workers(unenv) fs.readFile hack: 用 fetch 加载文件
-        if (typeof (globalThis as any).fs !== "object") {
-            (globalThis as any).fs = {
-                readFile: async (path: string) => {
-                    const res = await fetch(indexURL + path);
-                    if (!res.ok) throw new Error(`Failed to fetch ${path}`);
-                    return new Uint8Array(await res.arrayBuffer());
-                }
-            };
-        }
 
         try {
-            // 动态导入 Pyodide
-            const { loadPyodide } = await import("pyodide");
-            this.pyodide = await loadPyodide({
-                indexURL
-            });
+            // 动态导入 Pyodide ESM 模块（pyodide.mjs），避免 Node fs 依赖
+            const { loadPyodide } = await import(indexURL + "pyodide.mjs");
+            this.pyodide = await loadPyodide({ indexURL });
             this.pyodideInitialized = true;
         } catch (error) {
             console.error("Failed to initialize Pyodide:", error);
