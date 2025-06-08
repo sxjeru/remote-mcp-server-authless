@@ -109,6 +109,25 @@ class PythonInterpreter {
 		this.initModules();
 	}
 	
+	// 主执行方法
+	execute(code: string): string {
+		this.output = [];
+		
+		try {
+			// 预处理代码
+			const lines = this.preprocessCode(code);
+			
+			// 逐行执行
+			this.executeLines(lines);
+			
+			// 返回输出
+			return this.output.length > 0 ? this.output.join('\n') : '代码执行完成';
+			
+		} catch (error) {
+			throw new Error(`Python执行错误: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+	
 	private initBuiltins() {
 		// 输入输出函数
 		this.builtins.set('print', (...args: any[]) => {
@@ -427,89 +446,6 @@ class PythonInterpreter {
 		});
 	}
 
-	// ...existing code...
-	
-	private executeLine(line: string) {
-		// 处理import语句
-		if (line.startsWith('import ') || line.startsWith('from ')) {
-			this.handleImport(line);
-			return;
-		}
-		
-		// 变量赋值
-		if (line.includes('=') && !line.includes('==') && !line.includes('!=') && !line.includes('<=') && !line.includes('>=')) {
-			const [varName, expression] = line.split('=', 2).map(s => s.trim());
-			
-			// 处理多元赋值，如 a, b = 1, 2
-			if (varName.includes(',')) {
-				const varNames = varName.split(',').map(s => s.trim());
-				const value = this.evaluateExpression(expression);
-				
-				if (Array.isArray(value) && value.length === varNames.length) {
-					varNames.forEach((name, index) => {
-						this.variables.set(name, value[index]);
-					});
-				} else {
-					throw new Error('解包赋值的值数量不匹配');
-				}
-				return;
-			}
-			
-			const value = this.evaluateExpression(expression);
-			this.variables.set(varName, value);
-			return;
-		}
-		
-		// 函数调用或表达式
-		const result = this.evaluateExpression(line);
-		if (result !== undefined && result !== null) {
-			// 如果不是赋值语句且有返回值，打印结果
-			if (!line.includes('print(') && result !== '') {
-				this.output.push(String(result));
-			}
-		}
-	}
-	
-	private handleImport(line: string) {
-		// 处理 import module
-		const importMatch = line.match(/^import\s+(\w+)$/);
-		if (importMatch) {
-			const moduleName = importMatch[1];
-			if (this.modules.has(moduleName)) {
-				this.variables.set(moduleName, this.modules.get(moduleName));
-			} else {
-				throw new Error(`No module named '${moduleName}'`);
-			}
-			return;
-		}
-		
-		// 处理 from module import function
-		const fromImportMatch = line.match(/^from\s+(\w+)\s+import\s+(.+)$/);
-		if (fromImportMatch) {
-			const [, moduleName, imports] = fromImportMatch;
-			if (this.modules.has(moduleName)) {
-				const module = this.modules.get(moduleName);
-				const importNames = imports.split(',').map(s => s.trim());
-				
-				for (const importName of importNames) {
-					if (importName === '*') {
-						// import all
-						Object.assign(this.variables, module);
-					} else if (module[importName]) {
-						this.variables.set(importName, module[importName]);
-					} else {
-						throw new Error(`cannot import name '${importName}' from '${moduleName}'`);
-					}
-				}
-			} else {
-				throw new Error(`No module named '${moduleName}'`);
-			}
-			return;
-		}
-		
-		throw new Error(`Invalid import syntax: ${line}`);
-	}
-
 	private preprocessCode(code: string): string[] {
 		// 移除注释和空行
 		const lines = code.split('\n')
@@ -628,6 +564,87 @@ class PythonInterpreter {
 		return block;
 	}
 	
+	private executeLine(line: string) {
+		// 处理import语句
+		if (line.startsWith('import ') || line.startsWith('from ')) {
+			this.handleImport(line);
+			return;
+		}
+		
+		// 变量赋值
+		if (line.includes('=') && !line.includes('==') && !line.includes('!=') && !line.includes('<=') && !line.includes('>=')) {
+			const [varName, expression] = line.split('=', 2).map(s => s.trim());
+			
+			// 处理多元赋值，如 a, b = 1, 2
+			if (varName.includes(',')) {
+				const varNames = varName.split(',').map(s => s.trim());
+				const value = this.evaluateExpression(expression);
+				
+				if (Array.isArray(value) && value.length === varNames.length) {
+					varNames.forEach((name, index) => {
+						this.variables.set(name, value[index]);
+					});
+				} else {
+					throw new Error('解包赋值的值数量不匹配');
+				}
+				return;
+			}
+			
+			const value = this.evaluateExpression(expression);
+			this.variables.set(varName, value);
+			return;
+		}
+		
+		// 函数调用或表达式
+		const result = this.evaluateExpression(line);
+		if (result !== undefined && result !== null) {
+			// 如果不是赋值语句且有返回值，打印结果
+			if (!line.includes('print(') && result !== '') {
+				this.output.push(String(result));
+			}
+		}
+	}
+	
+	private handleImport(line: string) {
+		// 处理 import module
+		const importMatch = line.match(/^import\s+(\w+)$/);
+		if (importMatch) {
+			const moduleName = importMatch[1];
+			if (this.modules.has(moduleName)) {
+				this.variables.set(moduleName, this.modules.get(moduleName));
+			} else {
+				throw new Error(`No module named '${moduleName}'`);
+			}
+			return;
+		}
+		
+		// 处理 from module import function
+		const fromImportMatch = line.match(/^from\s+(\w+)\s+import\s+(.+)$/);
+		if (fromImportMatch) {
+			const [, moduleName, imports] = fromImportMatch;
+			if (this.modules.has(moduleName)) {
+				const module = this.modules.get(moduleName);
+				const importNames = imports.split(',').map(s => s.trim());
+				
+				for (const importName of importNames) {
+					if (importName === '*') {
+						// import all
+						Object.assign(this.variables, module);
+					} else if (module[importName]) {
+						this.variables.set(importName, module[importName]);
+					} else {
+						throw new Error(`cannot import name '${importName}' from '${moduleName}'`);
+					}
+				}
+			} else {
+				throw new Error(`No module named '${moduleName}'`);
+			}
+			return;
+		}
+		
+		throw new Error(`Invalid import syntax: ${line}`);
+	}
+	
 	private evaluateExpression(expr: string): any {
 		try {
 			// 处理字符串字面量
@@ -643,6 +660,23 @@ class PythonInterpreter {
 				
 				const items = content.split(',').map(item => this.evaluateExpression(item.trim()));
 				return items;
+			}
+			
+			// 处理方法调用 (object.method())
+			const methodMatch = expr.match(/(\w+)\.(\w+)\(([^)]*)\)/);
+			if (methodMatch) {
+				const [, objName, methodName, argsStr] = methodMatch;
+				
+				if (this.variables.has(objName)) {
+					const obj = this.variables.get(objName);
+					if (Array.isArray(obj) && methodName === 'append') {
+						const args = argsStr ? [this.evaluateExpression(argsStr.trim())] : [];
+						obj.push(...args);
+						return obj;
+					}
+				}
+				
+				throw new Error(`未知方法: ${objName}.${methodName}`);
 			}
 			
 			// 处理函数调用
