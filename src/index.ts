@@ -108,9 +108,20 @@ export class MyMCP extends McpAgent {
         const indexURL = "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/";
 
         try {
-            // Worker 中通过 importScripts 同步加载 pyodide.js
-            (globalThis as any).importScripts(indexURL + "pyodide.js");
-            // loadPyodide 挂在到全局
+            // Worker 环境加载 pyodide.js
+            if (typeof (globalThis as any).importScripts === "function") {
+                // 浏览器或 Web Worker
+                (globalThis as any).importScripts(indexURL + "pyodide.js");
+            } else {
+                // Cloudflare Worker 等不支持 importScripts 的环境，使用 fetch + Blob + dynamic import
+                const res = await fetch(indexURL + "pyodide.js");
+                const src = await res.text();
+                const blob = new Blob([src], { type: "application/javascript" });
+                const blobURL = URL.createObjectURL(blob);
+                await import(/* webpackIgnore: true */ blobURL);
+                URL.revokeObjectURL(blobURL);
+            }
+            // 从全局拿 loadPyodide
             this.pyodide = await (globalThis as any).loadPyodide({ indexURL });
             this.pyodideInitialized = true;
         } catch (error) {
